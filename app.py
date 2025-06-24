@@ -60,24 +60,27 @@ llm_model, gmaps_client, qdrant_client, embedding_model = get_services()
 
 @st.cache_data
 def get_coordinates(_gmaps_client, city_name: str):
-    """Converts a city name to latitude and longitude using Google Maps API."""
+    # ... (This function remains the same) ...
     try:
         geocode_result = _gmaps_client.geocode(city_name)
-        if geocode_result:
-            return geocode_result[0]['geometry']['location']['lat'], geocode_result[0]['geometry']['location']['lng']
+        if geocode_result: return geocode_result[0]['geometry']['location']['lat'], geocode_result[0]['geometry']['location']['lng']
     except Exception as e:
         st.error(f"Geocoding Error: {e}")
     return None, None
 
 def get_kundli_data(day, month, year, hour, minute, lat, lon, tzone):
-    """Calls your external astrology API. **YOU MUST ADAPT THIS TO MATCH YOUR API.**"""
+    """
+    CORRECTED: This function now uses the GET method and sends data as params.
+    """
     try:
         payload = {"day": day, "month": month, "year": year, "hour": hour, "min": minute, "lat": lat, "lon": lon, "tzone": tzone, "charts_format": "svg"}
         auth_string = f"{ASTRO_API_USER_ID}:{ASTRO_API_KEY}"
         b64_auth = base64.b64encode(auth_string.encode()).decode()
-        headers = {"Authorization": f"Basic {b64_auth}", "Content-Type": "application/json"}
+        headers = {"Authorization": f"Basic {b64_auth}"} # Content-Type is not needed for GET
+        
         with httpx.Client(timeout=30.0) as client:
-            response = client.post(ASTRO_API_URL, json=payload, headers=headers)
+            # --- THE FIX: Changed .post to .get and json= to params= ---
+            response = client.get(ASTRO_API_URL, params=payload, headers=headers)
             response.raise_for_status()
         return response.json()
     except Exception as e:
