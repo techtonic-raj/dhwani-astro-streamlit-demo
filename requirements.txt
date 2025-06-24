@@ -1,0 +1,9 @@
+streamlit
+httpx
+google-generativeai
+googlemaps
+qdrant-client
+sentence-transformers
+ebooklib
+beautifulsoup4
+PyMuPDF
