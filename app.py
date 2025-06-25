@@ -85,6 +85,10 @@ def get_coordinates(_gmaps_client, city_name: str):
     except Exception: return None, None
 
 def get_kundli_and_charts(day, month, year, hour, minute, lat, lon, tzone):
+    """
+    Makes multiple API calls to get Kundli data, all charts, AND Vimshottari Dasha periods
+    with robust error handling for inconsistent API responses.
+    """
     all_data = {}
     try:
         payload = {"day": day, "month": month, "year": year, "hour": hour, "min": minute, "lat": lat, "lon": lon, "tzone": tzone}
@@ -106,8 +110,24 @@ def get_kundli_and_charts(day, month, year, hour, minute, lat, lon, tzone):
                 st.write(f"Generating {chart_id} chart...")
                 chart_payload = {**payload, "chart_style": "NORTH_INDIAN"}
                 resp = client.post(f"https://json.astrologyapi.com/v1/horo_chart_image/{chart_id}", json=chart_payload, headers=headers).raise_for_status()
-                try: all_data['charts'][key] = resp.json().get('svg')
-                except json.JSONDecodeError: all_data['charts'][key] = None
+                
+                # --- START OF THE ROBUST FIX ---
+                try:
+                    # Try to parse it as JSON first
+                    data = resp.json()
+                    # Check if it's a dictionary and has the 'svg' key
+                    if isinstance(data, dict):
+                        all_data['charts'][key] = data.get('svg')
+                    else:
+                        all_data['charts'][key] = None
+                except json.JSONDecodeError:
+                    # If JSON fails, it might be a raw SVG string
+                    raw_text = resp.text
+                    if raw_text.strip().lower().startswith('<svg'):
+                        all_data['charts'][key] = raw_text
+                    else:
+                        all_data['charts'][key] = None
+                # --- END OF THE ROBUST FIX ---
         return all_data
     except Exception as e:
         st.error(f"Failed to fetch Astrology API data: {e}")
