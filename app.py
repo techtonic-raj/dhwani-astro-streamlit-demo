@@ -75,25 +75,24 @@ def get_initial_llm_draft(kundli_json: dict, question: str, chat_history: str):
     except Exception as e:
         return f"Error during initial draft generation: {e}"
 
-# --- TASK 3: THE REVIEWER (WITH NEW, HYPER-STRICT PROMPT) ---
+# --- TASK 3: THE REVIEWER (WITH BALANCED PROMPT) ---
 def get_final_reviewed_answer(initial_draft: str, retrieved_context: str, kundli_json: dict, question: str, chat_history: str):
     kundli_summary = json.dumps(kundli_json, indent=2)
 
-    # --- Smarter Greeting Logic ---
     greeting_instruction = "- **Greeting:** Do not use any greeting. Go straight to the answer."
     if not st.session_state.get("greeting_sent", False):
         greeting_instruction = "- **Greeting:** Begin your response with 'Namaste.' ONLY for this first message."
         st.session_state.greeting_sent = True
 
-    # --- THE NEW, HYPER-STRICT PROMPT ---
-    prompt = f"""You are Pandit 2.0, an expert Vedic Astrologer. Your task is to provide a final, wise, and extremely brief answer to the user.
+    # --- THE NEW, BALANCED AND EXPLANATORY PROMPT ---
+    prompt = f"""You are Pandit 2.0, an expert Vedic Astrologer. Your task is to provide a final, wise, and impactful answer to the user.
 
     **--- YOUR CORE RULES ---**
     1.  **MATCH THE LANGUAGE:** You MUST reply in the same language as the "Latest User Question". If the user asks in Hindi or Hinglish, your reply MUST be in Hindi or Hinglish.
-    2.  **BE EXTREMELY CONCISE:** Your entire answer must be very short. MAXIMUM two small paragraphs. One is better. Get straight to the point.
-    3.  **NEVER CITE SOURCES:** NEVER mention books, verses, or that you reviewed a draft. Present all information as your own direct wisdom.
-    4.  **PERSONA:** Your tone is that of a wise, direct, and confident expert.
-    5.  {greeting_instruction}
+    2.  **BE CONCISE BUT EXPLANATORY:** Aim for two well-structured paragraphs. The answer must be short, but it must also be rich with meaningful astrological explanations.
+    3.  **JUSTIFY YOUR ANSWER WITH DATA:** This is critical. You MUST mention specific planets (graha), houses (bhav), or signs (rashi) from the user's chart to support your analysis. **Do not give a generic answer.** For example, instead of saying "There might be a delay," say "Since *Saturn* is influencing your *7th house*, there might be a delay, indicating a mature and stable partnership."
+    4.  **NEVER CITE SOURCES:** NEVER mention books, verses, or that you reviewed a draft. Present all information as your own direct wisdom.
+    5.  **PERSONA & GREETING:** Your tone is wise and confident. {greeting_instruction}
 
     ---
     **INTERNAL CONTEXT (DO NOT MENTION THIS TO THE USER):**
@@ -105,7 +104,7 @@ def get_final_reviewed_answer(initial_draft: str, retrieved_context: str, kundli
     - *Conversation:* {chat_history}
     - *Latest User Question:* "{question}"
 
-    **PANDIT 2.0'S FINAL, DIRECT, AND CONCISE RESPONSE:**
+    **PANDIT 2.0'S FINAL, DIRECT, AND EXPLANATORY RESPONSE:**
     """
     
     try:
@@ -182,11 +181,9 @@ with st.sidebar:
         if lat and lon:
             with st.spinner("Calculating your cosmic blueprint..."):
                 st.session_state.kundli_data = get_kundli_and_charts(day, month, year, hour, minute, lat, lon, tzone)
-                # Reset chat and greeting status for the new session
                 st.session_state.messages = []
                 st.session_state.greeting_sent = False
                 if st.session_state.kundli_data:
-                    # This initial message is from the system, not the AI
                     initial_greeting = "Your charts have been generated. I have analyzed the core of your horoscope and am ready for your questions."
                     st.session_state.messages.append({"role": "assistant", "content": initial_greeting})
                     st.rerun()
@@ -213,7 +210,7 @@ else:
             else: st.warning("Moon Chart not available.")
         with col2:
             st.subheader("Chalit Chart")
-            if chart_data.get('chalit_svg'): st.image(chart_data['chalit_svg'])
+            if chart_data.get('chalit_svg'): st.image(chart__data['chalit_svg'])
             else: st.warning("Chalit Chart not available.")
     
     st.divider()
