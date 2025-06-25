@@ -44,38 +44,28 @@ llm_model, gmaps_client, qdrant_client, embedding_model = get_services()
 # --- -------------------------------------------- ---
 # --- 📞 3. API & CORE LOGIC FUNCTIONS 📞 ---
 # --- -------------------------------------------- ---
-
-# --- TASK 1: THE GUARDRAIL / FILTER ---
 def filter_user_question(question: str):
     prompt = f"""Analyze the user's question and classify it into one of two categories: "ASTROLOGY" or "META".
-    - "ASTROLOGY" questions are about horoscopes, planets, life events (marriage, career), etc.
-    - "META" questions are about you (the AI), how you are built, or other off-topic subjects.
-    User question: "{question}"
-    Category:"""
+    User question: "{question}" -> Category:"""
     try:
         response = llm_model.generate_content(prompt)
         category = response.text.strip().upper()
         return "ASTROLOGY" if "ASTROLOGY" in category else "META"
-    except Exception as e:
-        st.error(f"Error in question filter: {e}")
+    except Exception:
         return "ASTROLOGY"
 
-# --- TASK 2: THE DRAFTER ---
 def get_initial_llm_draft(kundli_json: dict, question: str, chat_history: str):
     kundli_summary = json.dumps(kundli_json, indent=2)
     prompt = f"""You are a junior Vedic Astrologer. Provide a direct, preliminary analysis based *only* on the provided birth chart and question. Be factual and concise.
-    *USER'S BIRTH CHART DATA:*
-    {kundli_summary}
-    ---
+    *USER'S BIRTH CHART DATA:* {kundli_summary}
     *LATEST USER QUESTION:* "{question}"
     *JUNIOR PANDIT'S PRELIMINARY DRAFT:*"""
     try:
         response = llm_model.generate_content(prompt)
         return response.text
-    except Exception as e:
-        return f"Error during initial draft generation: {e}"
+    except Exception:
+        return "Error generating draft."
 
-# --- TASK 3: THE REVIEWER (WITH BALANCED PROMPT) ---
 def get_final_reviewed_answer(initial_draft: str, retrieved_context: str, kundli_json: dict, question: str, chat_history: str):
     kundli_summary = json.dumps(kundli_json, indent=2)
 
@@ -84,27 +74,27 @@ def get_final_reviewed_answer(initial_draft: str, retrieved_context: str, kundli
         greeting_instruction = "- **Greeting:** Begin your response with 'Namaste.' ONLY for this first message."
         st.session_state.greeting_sent = True
 
-    # --- THE NEW, BALANCED AND EXPLANATORY PROMPT ---
+    # --- THE NEW, FLAW-FIXING PROMPT ---
     prompt = f"""You are Pandit 2.0, an expert Vedic Astrologer. Your task is to provide a final, wise, and impactful answer to the user.
 
     **--- YOUR CORE RULES ---**
-    1.  **MATCH THE LANGUAGE:** You MUST reply in the same language as the "Latest User Question". If the user asks in Hindi or Hinglish, your reply MUST be in Hindi or Hinglish.
-    2.  **BE CONCISE BUT EXPLANATORY:** Aim for two well-structured paragraphs. The answer must be short, but it must also be rich with meaningful astrological explanations.
-    3.  **JUSTIFY YOUR ANSWER WITH DATA:** This is critical. You MUST mention specific planets (graha), houses (bhav), or signs (rashi) from the user's chart to support your analysis. **Do not give a generic answer.** For example, instead of saying "There might be a delay," say "Since *Saturn* is influencing your *7th house*, there might be a delay, indicating a mature and stable partnership."
-    4.  **NEVER CITE SOURCES:** NEVER mention books, verses, or that you reviewed a draft. Present all information as your own direct wisdom.
+    1.  **THE USER'S CHART IS THE ONLY TRUTH:** The `Chart Data` provided is the absolute source of truth for the user's life.
+    2.  **PRINCIPLES, NOT EXAMPLES:** The `Ancient Verses` retrieved from the database are for understanding timeless astrological **principles and rules only**. They might contain examples from other people's charts. **You MUST IGNORE and NEVER MENTION any specific life events, dates, or personal details found in these verses.** Your entire analysis must be a unique synthesis of the principles applied *exclusively* to the user's personal `Chart Data`.
+    3.  **MATCH THE LANGUAGE:** You MUST reply in the same language as the "Latest User Question".
+    4.  **BE CONCISE BUT EXPLANATORY:** Aim for two well-structured paragraphs. The answer must be short but rich with meaning, mentioning specific planets (graha), houses (bhav), or signs (rashi) from the user's chart to justify your analysis.
     5.  **PERSONA & GREETING:** Your tone is wise and confident. {greeting_instruction}
 
     ---
-    **INTERNAL CONTEXT (DO NOT MENTION THIS TO THE USER):**
+    **INTERNAL CONTEXT FOR PRINCIPLES ONLY (IGNORE SPECIFIC EXAMPLES HERE):**
     - *Ancient Verses:* {retrieved_context}
     - *Junior's Draft:* {initial_draft}
     ---
-    **USER'S DATA (Address this directly):**
+    **THE ONLY SOURCE OF TRUTH FOR PERSONAL DATA:**
     - *Chart Data:* {kundli_summary}
     - *Conversation:* {chat_history}
     - *Latest User Question:* "{question}"
 
-    **PANDIT 2.0'S FINAL, DIRECT, AND EXPLANATORY RESPONSE:**
+    **PANDIT 2.0'S FINAL, PERSONALIZED, AND EXPLANATORY RESPONSE:**
     """
     
     try:
@@ -114,7 +104,6 @@ def get_final_reviewed_answer(initial_draft: str, retrieved_context: str, kundli
     except Exception as e:
         yield f"Error communicating with the Senior AI Brain: {e}"
 
-# (get_coordinates and get_kundli_and_charts functions remain the same)
 @st.cache_data
 def get_coordinates(_gmaps_client, city_name: str):
     try:
@@ -171,7 +160,7 @@ with st.sidebar:
     st.header("Enter Birth Details")
     day = st.number_input("Day", 1, 31, 15)
     month = st.number_input("Month", 1, 12, 5)
-    year = st.number_input("Year", 1990, 2023, 1995)
+    year = st.number_input("Year", 1990, 2023, 2001) # Default to 2001
     hour = st.number_input("Hour (24h)", 0, 23, 14)
     minute = st.number_input("Minute", 0, 59, 30)
     tzone = st.number_input("Timezone", value=5.5, format="%.1f")
@@ -210,7 +199,7 @@ else:
             else: st.warning("Moon Chart not available.")
         with col2:
             st.subheader("Chalit Chart")
-            if chart_data.get('chalit_svg'): st.image(chart__data['chalit_svg'])
+            if chart_data.get('chalit_svg'): st.image(chart_data['chalit_svg'])
             else: st.warning("Chalit Chart not available.")
     
     st.divider()
