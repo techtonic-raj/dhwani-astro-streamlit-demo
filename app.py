@@ -243,16 +243,12 @@ except KeyError as e:
 @st.cache_resource
 def get_services():
     """Initializes all the necessary clients and a single, versatile AI model."""
-    # --- MODIFIED: Using the user-specified preview model for all AI tasks. ---
     llm_model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17')
-    
     gmaps_client = googlemaps.Client(key=GOOGLE_MAPS_API_KEY)
     qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
     embedding_model = SentenceTransformer('paraphrase-multilingual-mpnet-base-v2')
-    
     return llm_model, gmaps_client, qdrant_client, embedding_model
 
-# Unpack the single model and other services
 llm_model, gmaps_client, qdrant_client, embedding_model = get_services()
 
 
@@ -344,7 +340,6 @@ def get_final_reviewed_answer(initial_draft: str, retrieved_context: str, kundli
     except Exception as e:
         yield f"Error communicating with the Senior AI Brain: {e}"
 
-# (get_coordinates and get_kundli_and_charts functions remain the same)
 @st.cache_data
 def get_coordinates(_gmaps_client, city_name: str):
     try:
@@ -355,28 +350,42 @@ def get_coordinates(_gmaps_client, city_name: str):
         st.error(f"Geocoding Error: {e}")
     return None, None
 
+# --- RESTORED CHART FUNCTION ---
+# This is your original, working function for fetching kundli and chart data.
 def get_kundli_and_charts(day, month, year, hour, minute, lat, lon, tzone):
+    """
+    Makes multiple API calls to get Kundli data and all four charts robustly.
+    (This is the user's original, working implementation).
+    """
     all_data = {}
     try:
         payload = {"day": day, "month": month, "year": year, "hour": hour, "min": minute, "lat": lat, "lon": lon, "tzone": tzone}
         auth_string = f"{ASTRO_API_USER_ID}:{ASTRO_API_KEY}"
         b64_auth = base64.b64encode(auth_string.encode()).decode()
         headers = {"Authorization": f"Basic {b64_auth}", "Content-Type": "application/json"}
+
         with httpx.Client(timeout=45.0) as client:
             st.write("Fetching birth details...")
             main_response = client.post(f"https://json.astrologyapi.com/v1/astro_details", json=payload, headers=headers)
             main_response.raise_for_status()
             all_data['kundli_data'] = main_response.json()
+            
             all_data['charts'] = {}
             charts_to_fetch = {"d1_svg": "D1", "d9_svg": "D9", "moon_svg": "MOON", "chalit_svg": "chalit"}
+            
             for key, chart_id in charts_to_fetch.items():
                 st.write(f"Generating {chart_id} chart...")
                 chart_payload = {**payload, "chart_style": "NORTH_INDIAN"}
                 chart_response = client.post(f"https://json.astrologyapi.com/v1/horo_chart_image/{chart_id}", json=chart_payload, headers=headers)
                 chart_response.raise_for_status()
+                
+                # Robustly handle inconsistent API responses for charts
                 try:
                     data = chart_response.json()
-                    all_data['charts'][key] = data.get('svg')
+                    if isinstance(data, dict) and 'svg' in data:
+                        all_data['charts'][key] = data['svg']
+                    else:
+                        all_data['charts'][key] = None
                 except json.JSONDecodeError:
                     all_data['charts'][key] = None
         return all_data
@@ -393,7 +402,6 @@ st.title("✨ Pandit 2.0 - AI Astrologer")
 if "kundli_data" not in st.session_state: st.session_state.kundli_data = None
 if "messages" not in st.session_state: st.session_state.messages = []
 
-# (Sidebar and chart display code remains unchanged)
 with st.sidebar:
     st.header("Enter Birth Details")
     day = st.number_input("Day", 1, 31, 15)
@@ -424,16 +432,20 @@ else:
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("Lagna (D1)")
-            st.image(chart_data.get('d1_svg', ''))
+            if chart_data.get('d1_svg'): st.image(chart_data['d1_svg'])
+            else: st.warning("D1 Chart not available.")
         with col2:
             st.subheader("Navamsa (D9)")
-            st.image(chart_data.get('d9_svg', ''))
+            if chart_data.get('d9_svg'): st.image(chart_data['d9_svg'])
+            else: st.warning("D9 Chart not available.")
         with col1:
             st.subheader("Moon Chart")
-            st.image(chart_data.get('moon_svg', ''))
+            if chart_data.get('moon_svg'): st.image(chart_data['moon_svg'])
+            else: st.warning("Moon Chart not available.")
         with col2:
             st.subheader("Chalit Chart")
-            st.image(chart_data.get('chalit_svg', ''))
+            if chart_data.get('chalit_svg'): st.image(chart_data['chalit_svg'])
+            else: st.warning("Chalit Chart not available.")
     
     st.divider()
 
@@ -446,7 +458,6 @@ else:
         with st.chat_message("user"): st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            # --- STEP 1: FILTER THE QUESTION ---
             category = filter_user_question(prompt)
             
             if category == "META":
@@ -454,7 +465,7 @@ else:
                 st.write(canned_response)
                 st.session_state.messages.append({"role": "assistant", "content": canned_response})
             
-            else: # --- The question is about ASTROLOGY ---
+            else:
                 main_kundli_data = st.session_state.kundli_data.get('kundli_data', {})
                 history_str = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
                 
