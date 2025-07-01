@@ -355,7 +355,7 @@ def run_ai_pipeline(kundli_json: dict, question: str, chat_history: str):
 # --- --------------------------------------- ---
 # --- 🎨 4. THE STREAMLIT USER INTERFACE 🎨 ---
 # --- --------------------------------------- ---
-st.set_page_config(page_title="Pandit 2.0 Pro", layout="centered")
+st.set_page_config(page_title="Pandit 2.0 Pro", layout="centered") 
 st.title("✨ Pandit 2.0 - AI Astrologer")
 
 
