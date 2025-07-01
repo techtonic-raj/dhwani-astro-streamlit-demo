@@ -360,7 +360,7 @@ CHART_STYLE = """
 <style>
     /* Target the container for each chart image */
     div[data-testid="stImage"] {
-        background-color: #1a1a2e; /* A dark, celestial blue background */
+        background-color: #fcfafa; /* A dark, celestial blue background */
         padding: 1rem;
         border-radius: 0.75rem;
         border: 1px solid #4a4e69;
