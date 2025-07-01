@@ -365,6 +365,20 @@ def fix_svg_background(svg_string: str) -> str:
 
 
 
+    def inject_white_bg_svg(svg_text: str) -> str:
+    try:
+        if not svg_text.strip().startswith("<svg"):
+            return svg_text
+
+        insert_index = svg_text.find(">") + 1
+        white_rect = '<rect width="100%" height="100%" fill="white" />'
+        return svg_text[:insert_index] + white_rect + svg_text[insert_index:]
+    except Exception:
+        return svg_text
+
+
+
+
 st.set_page_config(page_title="Pandit 2.0 Pro", layout="centered")
 st.title("✨ Pandit 2.0 - AI Astrologer")
 
@@ -401,25 +415,11 @@ if st.session_state.kundli_data:
             with cols[i % 2]:
                 st.subheader(name)
                 # if img := charts.get(key): st.image(fix_svg_background(img))
-                from xml.dom import minidom
+  # //////////////////////////////
+                if img := charts.get(key):
+    fixed_svg = inject_white_bg_svg(img)
+    st.markdown(f"<div style='border:1px solid #ccc; padding:10px'>{fixed_svg}</div>", unsafe_allow_html=True)
 
-def render_svg_white(svg_data: str):
-    try:
-        # Parse and inject white background
-        doc = minidom.parseString(svg_data)
-        svg_tag = doc.getElementsByTagName('svg')[0]
-        style_attr = svg_tag.getAttribute('style')
-        if "background-color" not in style_attr:
-            new_style = style_attr + "; background-color:white" if style_attr else "background-color:white"
-            svg_tag.setAttribute("style", new_style)
-        return doc.toxml()
-    except Exception:
-        return svg_data  # fallback
-
-# Display the SVGs as raw HTML
-if img := charts.get(key):
-    fixed_svg = render_svg_white(img)
-    st.markdown(f"<div>{fixed_svg}</div>", unsafe_allow_html=True)
 
                 else: st.warning(f"{name} not available.")
     
