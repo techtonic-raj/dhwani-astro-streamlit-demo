@@ -352,29 +352,25 @@ def get_kundli_and_charts(day, month, year, hour, minute, lat, lon, tzone):
 # --- --------------------------------------- ---
 
 
-def fix_svg_background(svg_string: str) -> str:
+def fix_svg_background(svg_string: str):
     if not svg_string.strip().startswith("<svg"):
         return svg_string  # Not valid SVG, skip
     if 'style=' not in svg_string:
-        # Inject background style
         svg_string = svg_string.replace("<svg", '<svg style="background-color:white"')
     elif "background-color" not in svg_string:
-        # Append background color to existing style
         svg_string = svg_string.replace('style="', 'style="background-color:white; ')
     return svg_string
 
-
-
-    def inject_white_bg_svg(svg_text: str) -> str:
+def inject_white_bg_svg(svg_text: str) -> str:
     try:
         if not svg_text.strip().startswith("<svg"):
             return svg_text
-
         insert_index = svg_text.find(">") + 1
         white_rect = '<rect width="100%" height="100%" fill="white" />'
         return svg_text[:insert_index] + white_rect + svg_text[insert_index:]
     except Exception:
         return svg_text
+
 
 
 
@@ -416,9 +412,14 @@ if st.session_state.kundli_data:
                 st.subheader(name)
                 # if img := charts.get(key): st.image(fix_svg_background(img))
   # //////////////////////////////
-                if img := charts.get(key):
+    #             if img := charts.get(key):
+    # fixed_svg = inject_white_bg_svg(img)
+    # st.markdown(f"<div style='border:1px solid #ccc; padding:10px'>{fixed_svg}</div>", unsafe_allow_html=True)
+    if img := charts.get(key):
     fixed_svg = inject_white_bg_svg(img)
     st.markdown(f"<div style='border:1px solid #ccc; padding:10px'>{fixed_svg}</div>", unsafe_allow_html=True)
+else:
+    st.warning(f"{name} not available.")
 
 
                 else: st.warning(f"{name} not available.")
