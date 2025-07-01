@@ -415,11 +415,10 @@ if st.session_state.kundli_data:
     #             if img := charts.get(key):
     # fixed_svg = inject_white_bg_svg(img)
     # st.markdown(f"<div style='border:1px solid #ccc; padding:10px'>{fixed_svg}</div>", unsafe_allow_html=True)
-    if img := charts.get(key):
+   if img := charts.get(key):
     fixed_svg = inject_white_bg_svg(img)
     st.markdown(f"<div style='border:1px solid #ccc; padding:10px'>{fixed_svg}</div>", unsafe_allow_html=True)
-else:
-    st.warning(f"{name} not available.")
+
 
 
                 else: st.warning(f"{name} not available.")
