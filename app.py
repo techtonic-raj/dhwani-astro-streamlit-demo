@@ -223,19 +223,21 @@ def get_services():
         HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
     }
 
-    # Agent 1: The Guard (Fast & Cheap, for classification)
-    filter_model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17', safety_settings=safety_settings)
+    model_name = st.secrets["GEMINI_MODEL"]
 
-    # Agent 2: The Analyst (Powerful & Web-Enabled)
-    tools = [genai.protos.Tool(google_search_retrieval=genai.protos.GoogleSearchRetrieval(disable_attribution=False))]
-    analyst_model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17', tools=tools, safety_settings=safety_settings)
+    # Agent 1: The Guard (Fast & Cheap, for classification)
+    filter_model = genai.GenerativeModel(model_name, safety_settings=safety_settings)
+
+    # Agent 2: The Analyst (Powerful, no search tools now)
+    analyst_model = genai.GenerativeModel(model_name, safety_settings=safety_settings)
     
     # Agent 3: The Orator (Fast & Persona-driven)
-    orator_model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17', safety_settings=safety_settings)
+    orator_model = genai.GenerativeModel(model_name, safety_settings=safety_settings)
 
     gmaps_client = googlemaps.Client(key=GOOGLE_MAPS_API_KEY)
     
     return filter_model, analyst_model, orator_model, gmaps_client
+
 
 filter_model, analyst_model, orator_model, gmaps_client = get_services()
 
