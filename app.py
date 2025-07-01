@@ -246,59 +246,104 @@ filter_model, analyst_model, orator_model, gmaps_client = get_services()
 # --- 📞 3. CORE LOGIC & API FUNCTIONS 📞 ---
 # --- -------------------------------------------- ---
 
-def filter_user_question(question: str):
-    """Uses the fast 'Guard' model to classify the user's intent."""
-    prompt = f"""Analyze the user's question and classify it into "ASTROLOGY" or "META". User question: "{question}" -> Category:"""
+def style_svg_chart(svg_string: str, line_color: str = "#FCA311", text_color: str = "#E0E0E0"):
+    """Takes a raw SVG string and replaces black strokes and fills with vibrant colors."""
+    if not svg_string or not svg_string.strip().lower().startswith('<svg'):
+        return None # Return None if the input is not a valid SVG string
+    
+    # Replace black strokes (lines) with a vibrant gold/yellow
+    svg_string = svg_string.replace('stroke="black"', f'stroke="{line_color}"')
+    svg_string = svg_string.replace('stroke="#000000"', f'stroke="{line_color}"')
+    
+    # Replace black fills (text) with a light grey/white
+    svg_string = svg_string.replace('fill="black"', f'fill="{text_color}"')
+    svg_string = svg_string.replace('fill="#000000"', f'fill="{text_color}"')
+    
+    return svg_string
+
+@st.cache_data
+def get_coordinates(_gmaps_client, city_name: str):
     try:
-        response = filter_model.generate_content(prompt)
-        return "ASTROLOGY" if "ASTROLOGY" in response.text.strip().upper() else "META"
-    except Exception: return "ASTROLOGY" # Default to valid if filter fails
+        geocode_result = _gmaps_client.geocode(city_name)
+        if geocode_result: return geocode_result[0]['geometry']['location']['lat'], geocode_result[0]['geometry']['location']['lng']
+    except Exception: return None, None
+    return None, None
+
+def get_kundli_and_charts(day, month, year, hour, minute, lat, lon, tzone):
+    all_data = {}
+    try:
+        payload = {"day": day, "month": month, "year": year, "hour": hour, "min": minute, "lat": lat, "lon": lon, "tzone": tzone}
+        auth_string = f"{ASTRO_API_USER_ID}:{ASTRO_API_KEY}"
+        headers = {"Authorization": f"Basic {base64.b64encode(auth_string.encode()).decode()}"}
+        
+        with httpx.Client(timeout=45.0) as client:
+            st.write("Fetching birth details...")
+            all_data['kundli_data'] = client.post(f"{ASTRO_API_BASE_URL}/astro_details", json=payload, headers=headers).raise_for_status().json()
+            st.write("Fetching Dasha periods...")
+            all_data['major_vdasha'] = client.post(f"{ASTRO_API_BASE_URL}/major_vdasha", json=payload, headers=headers).raise_for_status().json()
+            
+            all_data['charts'] = {}
+            for key, chart_id in {"d1_svg": "D1", "d9_svg": "D9", "moon_svg": "MOON", "chalit_svg": "chalit"}.items():
+                st.write(f"Generating {chart_id} chart...")
+                chart_payload = {**payload, "chart_style": "NORTH_INDIAN"}
+                resp = client.post(f"{ASTRO_API_BASE_URL}/horo_chart_image/{chart_id}", json=chart_payload, headers=headers).raise_for_status()
+                
+                raw_svg = None
+                try:
+                    data = resp.json()
+                    if isinstance(data, dict): raw_svg = data.get('svg')
+                except json.JSONDecodeError:
+                    raw_text = resp.text
+                    if raw_text.strip().lower().startswith('<svg'): raw_svg = raw_text
+                
+                all_data['charts'][key] = style_svg_chart(raw_svg)
+        return all_data
+    except Exception as e:
+        st.error(f"Failed to fetch Astrology API data: {e}")
+        return None
 
 def run_ai_pipeline(kundli_json: dict, question: str, chat_history: str):
-    """
-    This is the new master function that runs the Three-Agent Pipeline.
-    """
-    # --- AGENT 2: The Analyst (Data Synthesis & Web Search) ---
-    kundli_summary = json.dumps(kundli_json, indent=2)
-    analyst_prompt = f"""You are a master data analyst AI. Your task is to synthesize all available information to create a detailed, factual analysis.
+    """This function runs the full Three-Agent Pipeline."""
+    guard_prompt = f"""Analyze the user's question. Classify it as 'valid_astrology', 'greeting', or 'off_topic'. Respond with ONLY one of these words. User Question: "{question}" """
+    try:
+        guard_response = guard_model.generate_content(guard_prompt)
+        classification = guard_response.text.strip().lower()
+    except Exception as e:
+        st.warning(f"Filter model failed, proceeding with caution. Error: {e}")
+        classification = 'valid_astrology' # Default to valid if the guard fails
+
+    if 'off_topic' in classification:
+        yield "Namaste. I am Pandit 2.0, your personal astrological guide. My purpose is to provide insights based on your birth chart. Please feel free to ask me any questions about your life's path."
+        return
+    if 'greeting' in classification:
+        yield "Namaste. How may I assist you with your astrological queries today?"
+        return
+
+    analyst_prompt = f"""You are a master data analyst AI. Your task is to synthesize all available information into a detailed, factual analysis.
     1. Analyze the User's Birth Chart Data.
     2. Analyze the Conversation History for context.
-    3. If the user's question requires information you don't have (like current events, niche topics, or specific remedies), perform a Google Search to get the facts.
-    4. Combine everything into a detailed, fact-rich, but unformatted block of text that answers the user's question. Do not worry about persona or greetings. Just provide the core analysis.
+    3. Combine everything into a detailed, fact-rich, but unformatted block of text that answers the user's question. Just provide the core analysis.
 
-    **USER'S BIRTH CHART DATA:**
-    {kundli_summary}
-    **CONVERSATION HISTORY:**
-    {chat_history}
+    **USER'S BIRTH CHART DATA:** {json.dumps(kundli_json)}
+    **CONVERSATION HISTORY:** {chat_history}
     **USER QUESTION:** "{question}"
-
-    **DETAILED FACTUAL ANALYSIS:**
-    """
+    **DETAILED FACTUAL ANALYSIS:**"""
     
     try:
         analysis_text = analyst_model.generate_content(analyst_prompt).text
     except Exception as e:
-        yield f"Error during analysis phase: {e}"
-        return
+        yield f"Error during analysis phase: {e}"; return
 
-    # --- AGENT 3: The Orator (Persona & Formatting) ---
-    greeting_instruction = "- **Greeting:** Do not use any greeting."
-    if not st.session_state.get("greeting_sent", False):
-        greeting_instruction = "- **Greeting:** Begin with 'Namaste.' ONLY for this first message."
-        st.session_state.greeting_sent = True
+    greeting_instruction = "" if st.session_state.greeting_sent else "- Greeting: Begin with 'Namaste.' ONLY for this first message."
+    if not st.session_state.greeting_sent: st.session_state.greeting_sent = True
 
-    orator_prompt = f"""You are Pandit 2.0, a world-class Vedic Astrologer. Your task is to take the provided 'RAW ANALYSIS' and rewrite it into a final, polished response for the user.
-    
+    orator_prompt = f"""You are Pandit 2.0, a world-class Vedic Astrologer. Your task is to take the provided 'RAW ANALYSIS' and rewrite it into a final, polished response.
     **Your Persona & Structure (CRUCIAL):**
-    - **Tone:** Wise, confident, empathetic, and direct.
-    - **Highlighting:** Use **bold text** for key astrological terms.
-    - **Concise & Structured:** Aim for two well-structured, explanatory paragraphs. {greeting_instruction}
-
-    **RAW ANALYSIS TO REWRITE:**
-    {analysis_text}
-
-    **PANDIT 2.0'S POLISHED RESPONSE:**
-    """
+    - Tone: Wise, confident, and empathetic.
+    - Highlighting: Use **bold text** for key astrological terms (planets, houses, signs, yogas).
+    - Concise & Structured: Aim for two well-structured, easy-to-read paragraphs. {greeting_instruction}
+    **RAW ANALYSIS TO REWRITE:** {analysis_text}
+    **PANDIT 2.0'S POLISHED RESPONSE:**"""
     
     try:
         response_stream = orator_model.generate_content(orator_prompt, stream=True)
@@ -306,46 +351,6 @@ def run_ai_pipeline(kundli_json: dict, question: str, chat_history: str):
             yield chunk.text
     except Exception as e:
         yield f"Error during formatting phase: {e}"
-
-# These two functions remain unchanged from your working version
-@st.cache_data
-def get_coordinates(_gmaps_client, city_name: str):
-    try:
-        geocode_result = _gmaps_client.geocode(city_name)
-        return geocode_result[0]['geometry']['location']['lat'], geocode_result[0]['geometry']['location']['lng'] if geocode_result else (None, None)
-    except Exception: return None, None
-
-def get_kundli_and_charts(day, month, year, hour, minute, lat, lon, tzone):
-    all_data = {}
-    try:
-        payload = {"day": day, "month": month, "year": year, "hour": hour, "min": minute, "lat": lat, "lon": lon, "tzone": tzone}
-        auth_string = f"{st.secrets['ASTRO_API_USER_ID']}:{st.secrets['ASTRO_API_KEY']}"
-        headers = {"Authorization": f"Basic {base64.b64encode(auth_string.encode()).decode()}"}
-        
-        with httpx.Client(timeout=45.0) as client:
-            st.write("Fetching birth details...")
-            all_data['kundli_data'] = client.post("https://json.astrologyapi.com/v1/astro_details", json=payload, headers=headers).raise_for_status().json()
-            st.write("Fetching Major Dasha periods...")
-            all_data['major_vdasha'] = client.post("https://json.astrologyapi.com/v1/major_vdasha", json=payload, headers=headers).raise_for_status().json()
-            st.write("Fetching Current Dasha...")
-            all_data['current_vdasha'] = client.post("https://json.astrologyapi.com/v1/current_vdasha", json=payload, headers=headers).raise_for_status().json()
-            all_data['charts'] = {}
-            for key, chart_id in {"d1_svg": "D1", "d9_svg": "D9", "moon_svg": "MOON", "chalit_svg": "chalit"}.items():
-                st.write(f"Generating {chart_id} chart...")
-                chart_payload = {**payload, "chart_style": "NORTH_INDIAN"}
-                resp = client.post(f"https://json.astrologyapi.com/v1/horo_chart_image/{chart_id}", json=chart_payload, headers=headers).raise_for_status()
-                try:
-                    data = resp.json()
-                    if isinstance(data, dict): all_data['charts'][key] = data.get('svg')
-                    else: all_data['charts'][key] = None
-                except json.JSONDecodeError:
-                    raw_text = resp.text
-                    if raw_text.strip().lower().startswith('<svg'): all_data['charts'][key] = raw_text
-                    else: all_data['charts'][key] = None
-        return all_data
-    except Exception as e:
-        st.error(f"Failed to fetch Astrology API data: {e}")
-        return None
 
 # --- --------------------------------------- ---
 # --- 🎨 4. THE STREAMLIT USER INTERFACE 🎨 ---
