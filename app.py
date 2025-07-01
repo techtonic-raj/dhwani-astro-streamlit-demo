@@ -350,23 +350,45 @@ def get_kundli_and_charts(day, month, year, hour, minute, lat, lon, tzone):
 # --- --------------------------------------- ---
 # --- 🎨 4. THE STREAMLIT USER INTERFACE 🎨 ---
 # --- --------------------------------------- ---
-
-
-# 🔍 Chart SVG Fixer
-def inject_white_bg_svg(svg_text: str) -> str:
-    try:
-        if not svg_text.strip().startswith("<svg"):
-            return svg_text
-        insert_index = svg_text.find(">") + 1
-        white_rect = '<rect width="100%" height="100%" fill="white" />'
-        return svg_text[:insert_index] + white_rect + svg_text[insert_index:]
-    except Exception:
-        return svg_text
-
-
-
 st.set_page_config(page_title="Pandit 2.0 Pro", layout="centered")
 st.title("✨ Pandit 2.0 - AI Astrologer")
+
+
+# --- THIS IS THE NEW CODE BLOCK TO ADD ---
+# Inject custom CSS to make the SVG charts colorful and visible on a dark theme.
+CHART_STYLE = """
+<style>
+    /* Target the container for each chart image */
+    div[data-testid="stImage"] {
+        background-color: #1a1a2e; /* A dark, celestial blue background */
+        padding: 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid #4a4e69;
+    }
+
+    /* Target the elements *inside* the SVG provided by the API */
+    div[data-testid="stImage"] svg text {
+        fill: #E0E0E0 !important; /* Force all text (planets, numbers) to be a light grey/white */
+        font-weight: bold;
+        font-size: 14px;
+        font-family: sans-serif;
+    }
+    
+    div[data-testid="stImage"] svg path, 
+    div[data-testid="stImage"] svg line,
+    div[data-testid="stImage"] svg polyline {
+        stroke: #FCA311 !important; /* A vibrant, golden-orange for all chart lines */
+        stroke-width: 1.5; /* Make lines slightly thicker and more visible */
+    }
+</style>
+"""
+st.markdown(CHART_STYLE, unsafe_allow_html=True)
+# --- END OF NEW CODE BLOCK ---
+
+
+
+
+
 
 if "kundli_data" not in st.session_state: st.session_state.kundli_data = None
 if "messages" not in st.session_state: st.session_state.messages = []
@@ -400,15 +422,8 @@ if st.session_state.kundli_data:
         for i, (key, name) in enumerate([("d1_svg", "Lagna (D1)"), ("d9_svg", "Navamsa (D9)"), ("moon_svg", "Moon Chart"), ("chalit_svg", "Chalit Chart")]):
             with cols[i % 2]:
                 st.subheader(name)
-                # if img := charts.get(key): st.image(fix_svg_background(img))
-  # //////////////////////////////
-   if img := charts.get(key):
-                    fixed = inject_white_bg_svg(img)
-                    st.markdown(f"<div style='border:1px solid #ccc; padding:10px'>{fixed}</div>", unsafe_allow_html=True)
-                else:
-                    st.warning(f"{name} not available.")
-
-
+                if img := charts.get(key): st.image(img)
+                else: st.warning(f"{name} not available.")
     
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"], unsafe_allow_html=True)
