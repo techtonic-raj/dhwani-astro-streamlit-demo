@@ -352,15 +352,7 @@ def get_kundli_and_charts(day, month, year, hour, minute, lat, lon, tzone):
 # --- --------------------------------------- ---
 
 
-def fix_svg_background(svg_string: str):
-    if not svg_string.strip().startswith("<svg"):
-        return svg_string  # Not valid SVG, skip
-    if 'style=' not in svg_string:
-        svg_string = svg_string.replace("<svg", '<svg style="background-color:white"')
-    elif "background-color" not in svg_string:
-        svg_string = svg_string.replace('style="', 'style="background-color:white; ')
-    return svg_string
-
+# 🔍 Chart SVG Fixer
 def inject_white_bg_svg(svg_text: str) -> str:
     try:
         if not svg_text.strip().startswith("<svg"):
@@ -370,8 +362,6 @@ def inject_white_bg_svg(svg_text: str) -> str:
         return svg_text[:insert_index] + white_rect + svg_text[insert_index:]
     except Exception:
         return svg_text
-
-
 
 
 
@@ -412,14 +402,13 @@ if st.session_state.kundli_data:
                 st.subheader(name)
                 # if img := charts.get(key): st.image(fix_svg_background(img))
   # //////////////////////////////
-                if img := charts.get(key):
-    fixed_svg = inject_white_bg_svg(img)
-    st.markdown(f"<div style='border:1px solid #ccc; padding:10px'>{fixed_svg}</div>", unsafe_allow_html=True)
+   if img := charts.get(key):
+                    fixed = inject_white_bg_svg(img)
+                    st.markdown(f"<div style='border:1px solid #ccc; padding:10px'>{fixed}</div>", unsafe_allow_html=True)
+                else:
+                    st.warning(f"{name} not available.")
 
 
-
-
-                else: st.warning(f"{name} not available.")
     
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"], unsafe_allow_html=True)
